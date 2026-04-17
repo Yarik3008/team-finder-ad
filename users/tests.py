@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -25,7 +27,7 @@ class UsersViewsTests(TestCase):
 
     def test_register_get_returns_page(self):
         response = self.client.get("/users/register/")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertTemplateUsed(response, "users/register.html")
 
     def test_register_post_creates_user_and_logs_in(self):
@@ -38,14 +40,14 @@ class UsersViewsTests(TestCase):
                 "password": "AnotherStrong123!",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertEqual(response.url, "/projects/list/")
         self.assertTrue(User.objects.filter(email="maria@example.com").exists())
         self.assertIn("_auth_user_id", self.client.session)
 
     def test_login_get_returns_page(self):
         response = self.client.get("/users/login/")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertTemplateUsed(response, "users/login.html")
 
     def test_login_post_success_redirects_to_projects(self):
@@ -53,7 +55,7 @@ class UsersViewsTests(TestCase):
             "/users/login/",
             {"email": self.user.email, "password": self.password},
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertEqual(response.url, "/projects/list/")
         self.assertIn("_auth_user_id", self.client.session)
 
@@ -62,19 +64,19 @@ class UsersViewsTests(TestCase):
             "/users/login/",
             {"email": self.user.email, "password": "wrong-password"},
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertContains(response, "Неверный имейл или пароль")
 
     def test_logout_logs_user_out(self):
         self.client.force_login(self.user)
         response = self.client.get("/users/logout/")
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertEqual(response.url, "/projects/list/")
         self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_user_detail_page_loads(self):
         response = self.client.get(f"/users/{self.user.id}/")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertTemplateUsed(response, "users/user-details.html")
         self.assertContains(response, self.user.name)
 
@@ -87,11 +89,11 @@ class UsersViewsTests(TestCase):
                 surname=f"Surname{idx}",
             )
         response_page_1 = self.client.get("/users/list/")
-        self.assertEqual(response_page_1.status_code, 200)
+        self.assertEqual(response_page_1.status_code, HTTPStatus.OK)
         self.assertEqual(len(response_page_1.context["participants"]), 12)
 
         response_page_2 = self.client.get("/users/list/?page=2")
-        self.assertEqual(response_page_2.status_code, 200)
+        self.assertEqual(response_page_2.status_code, HTTPStatus.OK)
         self.assertGreaterEqual(len(response_page_2.context["participants"]), 1)
 
     def test_users_filter_owners_of_favorite_projects(self):
@@ -101,7 +103,7 @@ class UsersViewsTests(TestCase):
         self.user.favorites.add(project)
 
         response = self.client.get("/users/list/?filter=owners-of-favorite-projects")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertIn(self.other_user, list(response.context["participants"]))
 
     def test_users_filter_not_applied_for_anonymous(self):
@@ -110,14 +112,14 @@ class UsersViewsTests(TestCase):
         self.user.favorites.add(project)
 
         response = self.client.get("/users/list/?filter=owners-of-favorite-projects")
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         participants = list(response.context["participants"])
         self.assertIn(self.user, participants)
         self.assertIn(self.other_user, participants)
 
     def test_edit_profile_requires_login(self):
         response = self.client.get("/users/edit-profile/")
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertIn("/accounts/login/", response.url)
 
     def test_edit_profile_post_updates_fields(self):
@@ -132,7 +134,7 @@ class UsersViewsTests(TestCase):
                 "github_url": "https://github.com/example",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.user.refresh_from_db()
         self.assertEqual(self.user.name, "Updated")
         self.assertEqual(self.user.phone, "+79991234567")
@@ -151,7 +153,7 @@ class UsersViewsTests(TestCase):
                 "github_url": "https://github.com/example",
             },
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertContains(response, "Такой номер уже используется другим пользователем.")
 
     def test_edit_profile_rejects_non_github_url(self):
@@ -166,12 +168,12 @@ class UsersViewsTests(TestCase):
                 "github_url": "https://example.com/not-github",
             },
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, HTTPStatus.OK)
         self.assertContains(response, "Ссылка должна вести на Github.")
 
     def test_change_password_requires_login(self):
         response = self.client.get("/users/change-password/")
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.assertIn("/accounts/login/", response.url)
 
     def test_change_password_post_success(self):
@@ -184,6 +186,6 @@ class UsersViewsTests(TestCase):
                 "new_password2": "NewStrongPass123!",
             },
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, HTTPStatus.FOUND)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password("NewStrongPass123!"))

@@ -2,12 +2,17 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import get_user_model
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 
 from users.forms import LoginForm, ProfileEditForm, RegisterForm
+from team_finder.pagination import get_paginated_page
 
 User = get_user_model()
+
+FILTER_OWNERS_OF_FAVORITE_PROJECTS = "owners-of-favorite-projects"
+FILTER_OWNERS_OF_PARTICIPATING_PROJECTS = "owners-of-participating-projects"
+FILTER_INTERESTED_IN_MY_PROJECTS = "interested-in-my-projects"
+FILTER_PARTICIPANTS_OF_MY_PROJECTS = "participants-of-my-projects"
 
 
 def register_view(request):
@@ -16,7 +21,7 @@ def register_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            return redirect("/projects/list/")
+            return redirect("projects:list")
     else:
         form = RegisterForm()
     return render(request, "users/register.html", {"form": form})
@@ -33,7 +38,7 @@ def login_view(request):
             )
             if user:
                 login(request, user)
-                return redirect("/projects/list/")
+                return redirect("projects:list")
             form.add_error(None, "Неверный имейл или пароль")
     else:
         form = LoginForm()
@@ -42,7 +47,7 @@ def login_view(request):
 
 def logout_view(request):
     logout(request)
-    return redirect("/projects/list/")
+    return redirect("projects:list")
 
 
 def user_detail_view(request, user_id):
@@ -54,18 +59,17 @@ def users_list_view(request):
     participants = User.objects.order_by("-id")
     active_filter = request.GET.get("filter")
     if request.user.is_authenticated and active_filter:
-        if active_filter == "owners-of-favorite-projects":
+        if active_filter == FILTER_OWNERS_OF_FAVORITE_PROJECTS:
             participants = participants.filter(owned_projects__in=request.user.favorites.all())
-        elif active_filter == "owners-of-participating-projects":
+        elif active_filter == FILTER_OWNERS_OF_PARTICIPATING_PROJECTS:
             participants = participants.filter(owned_projects__participants=request.user)
-        elif active_filter == "interested-in-my-projects":
+        elif active_filter == FILTER_INTERESTED_IN_MY_PROJECTS:
             participants = participants.filter(favorites__owner=request.user)
-        elif active_filter == "participants-of-my-projects":
+        elif active_filter == FILTER_PARTICIPANTS_OF_MY_PROJECTS:
             participants = participants.filter(participated_projects__owner=request.user)
         participants = participants.distinct()
 
-    paginator = Paginator(participants, 12)
-    page_obj = paginator.get_page(request.GET.get("page"))
+    page_obj = get_paginated_page(participants, request.GET.get("page"))
     return render(
         request,
         "users/participants.html",
@@ -83,7 +87,7 @@ def edit_profile_view(request):
         form = ProfileEditForm(request.POST, request.FILES, instance=request.user)
         if form.is_valid():
             form.save()
-            return redirect(f"/users/{request.user.id}")
+            return redirect("users:detail", user_id=request.user.id)
     else:
         form = ProfileEditForm(instance=request.user)
     return render(request, "users/edit_profile.html", {"form": form})
@@ -96,7 +100,7 @@ def change_password_view(request):
         if form.is_valid():
             user = form.save()
             update_session_auth_hash(request, user)
-            return redirect(f"/users/{request.user.id}")
+            return redirect("users:detail", user_id=request.user.id)
     else:
         form = PasswordChangeForm(request.user)
     return render(request, "users/change_password.html", {"form": form})

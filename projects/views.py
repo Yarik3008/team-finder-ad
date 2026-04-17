@@ -1,17 +1,18 @@
+from http import HTTPStatus
+
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from projects.forms import ProjectForm
 from projects.models import Project
+from team_finder.pagination import get_paginated_page
 
 
 def project_list_view(request):
     projects = Project.objects.select_related("owner").prefetch_related("participants").order_by("-created_at")
-    paginator = Paginator(projects, 12)
-    page_obj = paginator.get_page(request.GET.get("page"))
+    page_obj = get_paginated_page(projects, request.GET.get("page"))
     return render(
         request,
         "projects/project_list.html",
@@ -63,7 +64,7 @@ def toggle_participate_view(request, project_id):
 def complete_project_view(request, project_id):
     project = get_object_or_404(Project, pk=project_id)
     if project.owner_id != request.user.id or project.status != Project.STATUS_OPEN:
-        return JsonResponse({"status": "error"}, status=403)
+        return JsonResponse({"status": "error"}, status=HTTPStatus.FORBIDDEN)
     project.status = Project.STATUS_CLOSED
     project.save(update_fields=["status"])
     return JsonResponse({"status": "ok", "project_status": project.status})
@@ -78,7 +79,7 @@ def create_project_view(request):
             project.owner = request.user
             project.save()
             project.participants.add(request.user)
-            return redirect(f"/projects/{project.id}")
+            return redirect("projects:detail", project_id=project.id)
     else:
         form = ProjectForm()
     return render(request, "projects/create-project.html", {"form": form, "is_edit": False})
@@ -88,12 +89,12 @@ def create_project_view(request):
 def edit_project_view(request, project_id):
     project = get_object_or_404(Project, pk=project_id)
     if project.owner_id != request.user.id:
-        return redirect(f"/projects/{project.id}")
+        return redirect("projects:detail", project_id=project.id)
     if request.method == "POST":
         form = ProjectForm(request.POST, instance=project)
         if form.is_valid():
             project = form.save()
-            return redirect(f"/projects/{project.id}")
+            return redirect("projects:detail", project_id=project.id)
     else:
         form = ProjectForm(instance=project)
     return render(request, "projects/create-project.html", {"form": form, "is_edit": True})
